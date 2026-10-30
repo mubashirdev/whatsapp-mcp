@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import type { Driver } from "./whatsapp.ts";
 import { UserError } from "./errors.ts";
@@ -14,19 +14,27 @@ export const SAFE_SENDING: SendSafety = { minGapMs: 30_000, perHour: 8, perDay: 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
-/** Why sending now would be too much, or "" when it is fine. */
-export function sendRefusal(sentAt: number[], now: number, { minGapMs, perHour, perDay }: SendSafety): string {
-  const sinceLast = now - Math.max(0, ...sentAt);
+/** One send in the log. The text is kept only as a hash, so the log holds no message. */
+export type SentMessage = { at: number; hash: string };
+
+export const textHash = (text: string) => createHash("sha256").update(normalize(text).trim()).digest("hex");
+
+/** Why sending this text now would be too much, or "" when it is fine. */
+export function sendRefusal(sent: SentMessage[], now: number, hash: string, { minGapMs, perHour, perDay }: SendSafety): string {
+  const sinceLast = now - Math.max(0, ...sent.map((message) => message.at));
   if (sinceLast < minGapMs) return `Too soon after the last send. Wait ${Math.ceil((minGapMs - sinceLast) / 1000)} seconds and try again`;
-  if (sentAt.filter((time) => now - time < HOUR).length >= perHour) return `Already sent ${perHour} messages in the last hour. Try again later`;
-  if (sentAt.filter((time) => now - time < DAY).length >= perDay) return `Already sent ${perDay} messages in the last 24 hours. Try again tomorrow`;
+  const lastDay = sent.filter((message) => now - message.at < DAY);
+  // The same text to several chats is how spam looks, so a text goes out once a day.
+  if (lastDay.some((message) => message.hash === hash)) return "This exact text was already sent in the last 24 hours. Change the wording";
+  if (lastDay.filter((message) => now - message.at < HOUR).length >= perHour) return `Already sent ${perHour} messages in the last hour. Try again later`;
+  if (lastDay.length >= perDay) return `Already sent ${perDay} messages in the last 24 hours. Try again tomorrow`;
   return "";
 }
 
-function readSendLog(file: string | undefined): number[] {
+function readSendLog(file: string | undefined): SentMessage[] {
   if (!file) return [];
   try {
-    return (JSON.parse(readFileSync(file, "utf8")) as number[]).filter((time) => typeof time === "number");
+    return (JSON.parse(readFileSync(file, "utf8")) as SentMessage[]).filter((message) => typeof message?.at === "number" && typeof message.hash === "string");
   } catch {
     return [];
   }
@@ -44,13 +52,13 @@ export class Drafts {
   #driver: Driver;
   #drafts = new Map<string, Draft>();
   #safety: SendSafety | undefined;
-  #sentAt: number[];
+  #sent: SentMessage[];
 
   /** Without safety, sends are not limited. Only tests leave it out. */
   constructor(driver: Driver, safety?: SendSafety) {
     this.#driver = driver;
     this.#safety = safety;
-    this.#sentAt = readSendLog(safety?.logFile);
+    this.#sent = readSendLog(safety?.logFile);
   }
 
   /** Types the text into the chat's box and returns the draft id. Never sends. */
@@ -89,7 +97,7 @@ export class Drafts {
   async send(id: string): Promise<string> {
     const draft = this.#openDraft(id);
     if (this.#safety) {
-      const refusal = sendRefusal(this.#sentAt, Date.now(), this.#safety);
+      const refusal = sendRefusal(this.#sent, Date.now(), textHash(draft.text), this.#safety);
       if (refusal) throw new UserError(`${refusal}. The draft is still in the box`);
     }
     await this.#open(draft.chat);
@@ -98,7 +106,7 @@ export class Drafts {
     }
     // Marked first, so an error after the click can never lead to a second send.
     draft.state = "sent";
-    this.#recordSend();
+    this.#recordSend(draft.text);
     await this.#driver.clickSend();
     return draft.chat;
   }
@@ -118,10 +126,10 @@ export class Drafts {
     return `The draft in "${draft.chat}" was removed`;
   }
 
-  #recordSend(): void {
+  #recordSend(text: string): void {
     const now = Date.now();
-    this.#sentAt = [...this.#sentAt.filter((time) => now - time < DAY), now];
-    if (this.#safety?.logFile) writeFileSync(this.#safety.logFile, JSON.stringify(this.#sentAt), { mode: 0o600 });
+    this.#sent = [...this.#sent.filter((message) => now - message.at < DAY), { at: now, hash: textHash(text) }];
+    if (this.#safety?.logFile) writeFileSync(this.#safety.logFile, JSON.stringify(this.#sent), { mode: 0o600 });
   }
 
   #openDraft(id: string): Draft {
