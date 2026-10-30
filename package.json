@@ -1,0 +1,22 @@
+{
+  "name": "whatsapp-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "bun test",
+    "test:browser": "node --test test/browser.node-test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "playwright-core": "1.64.0-alpha-1790635538000",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "happy-dom": "21.0.4",
+    "typescript": "5.9.3"
+  }
+}

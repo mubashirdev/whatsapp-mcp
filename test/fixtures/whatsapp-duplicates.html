@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>WhatsApp</title></head>
+<!-- The fake WhatsApp Web page with two chats of the same name, like two contacts both saved as "Alex". -->
+<body>
+<div id="app">
+  <div id="side">
+    <div data-testid="chat-list-search-container"><input role="textbox" aria-label="Search or start a new chat" type="text" value=""></div>
+    <div aria-label="Chat list" role="grid">
+        <div role="row" data-testid="list-item">
+          <div role="gridcell" tabindex="-1"><div tabindex="-1" aria-selected="false"><div data-testid="cell-frame-container">
+            <div role="gridcell" aria-colindex="1">
+              <div data-testid="cell-frame-title"><div><div><span dir="auto" title="Alex">Alex</span></div></div></div>
+              <div data-testid="cell-frame-primary-detail"><span data-testid="chat-list-timestamp"><span>10:00</span></span></div>
+            </div>
+            <div data-testid="cell-frame-secondary"><div><span title="from the first Alex" data-testid="last-msg-status"><span dir="auto">from the first Alex</span></span></div></div>
+          </div></div></div>
+        </div>
+        <div role="row" data-testid="list-item">
+          <div role="gridcell" tabindex="-1"><div tabindex="-1" aria-selected="false"><div data-testid="cell-frame-container">
+            <div role="gridcell" aria-colindex="1">
+              <div data-testid="cell-frame-title"><div><div><span dir="auto" title="Alex">Alex</span></div></div></div>
+              <div data-testid="cell-frame-primary-detail"><span data-testid="chat-list-timestamp"><span>09:00</span></span></div>
+            </div>
+            <div data-testid="cell-frame-secondary"><div><span title="from the second Alex" data-testid="last-msg-status"><span dir="auto">from the second Alex</span></span></div></div>
+          </div></div></div>
+        </div>
+        <div role="row" data-testid="list-item">
+          <div role="gridcell" tabindex="-1"><div tabindex="-1" aria-selected="false"><div data-testid="cell-frame-container">
+            <div role="gridcell" aria-colindex="1">
+              <div data-testid="cell-frame-title"><div><div><span dir="auto" title="Alexandra">Alexandra</span></div></div></div>
+              <div data-testid="cell-frame-primary-detail"><span data-testid="chat-list-timestamp"><span>08:00</span></span></div>
+            </div>
+            <div data-testid="cell-frame-secondary"><div><span title="hi" data-testid="last-msg-status"><span dir="auto">hi</span></span></div></div>
+          </div></div></div>
+        </div>
+    </div>
+  </div>
+  <div id="main">
+    <header><span data-testid="conversation-info-header-chat-title">Alexandra</span></header>
+    <footer>
+      <div contenteditable="true" role="textbox" aria-label="Type a message"></div>
+      <button aria-label="Send">Send</button>
+    </footer>
+  </div>
+</div>
+<script>
+  window.clicks = 0;
+  for (const row of document.querySelectorAll("[role='row']")) {
+    row.addEventListener("click", () => {
+      window.clicks++;
+      document.querySelector("[data-testid='conversation-info-header-chat-title']").textContent = row.querySelector("span[title]").getAttribute("title");
+    });
+  }
+</script>
+</body>
+</html>
