@@ -12,10 +12,11 @@ export function fakePage(html: string) {
   document.write(html);
   const root = document.documentElement as unknown as Element;
   // open is the row really open, marked like clicks. A test can change it to stand in for you clicking a chat by hand.
-  const state = { box: "", open: "", sent: [] as { header: string; open: string; text: string }[], clicks: [] as string[], clicksMiss: false };
+  const state = { box: "", open: "", sent: [] as { header: string; open: string; text: string }[], clicks: [] as string[], clicksMiss: false, focus: null as Element | null };
   const header = () => root.querySelector(sel.chatTitle)!;
 
   const click = (element: Element) => {
+    state.focus = element;
     const title = element.querySelector(sel.chatName)?.getAttribute("title");
     if (element.matches(sel.sendButton)) {
       state.sent.push({ header: header().textContent ?? "", open: state.open, text: state.box });
@@ -39,7 +40,7 @@ export function fakePage(html: string) {
     textContent: async () => find()[0]?.textContent ?? null,
     innerText: async () => (find()[0]?.matches(sel.messageBox) ? state.box : (find()[0]?.textContent ?? "")),
     click: async () => click(find()[0]),
-    focus: async () => {},
+    focus: async () => void (state.focus = find()[0]),
     fill: async () => {},
     waitFor: async () => {},
   });
@@ -48,7 +49,8 @@ export function fakePage(html: string) {
     locator: (selector: string) => locator(() => (selector === "html" ? [root] : [...root.querySelectorAll(selector)])),
     keyboard: {
       insertText: async (text: string) => void (state.box += text),
-      type: async (text: string) => void (state.box += text),
+      // Only keys typed into the message box land in it; search words go to the search box.
+      type: async (text: string) => void (state.focus?.matches(sel.messageBox) && (state.box += text)),
       press: async (key: string) => {
         if (key === "Shift+Enter") state.box += "\n";
         if (key === "Backspace") state.box = "";

@@ -71,6 +71,14 @@ export function isOwnChat(header: { name: string; youLabel: boolean }, you: stri
 const WAIT = 10_000;
 const SHORT = 5_000;
 
+/** Types into the focused field one key at a time with uneven gaps, like a person. Pasting a whole text in an instant looks like a bot. */
+async function typeLikeAPerson(page: Page, text: string): Promise<void> {
+  for (const key of text) {
+    await page.keyboard.type(key);
+    await new Promise((resolve) => setTimeout(resolve, 40 + Math.random() * 110));
+  }
+}
+
 /** The Driver for the real WhatsApp page, through Playwright. Every page call has a timeout. */
 export function browserDriver(getPage: () => Promise<Page> = whatsappPage): Driver {
   const html = async () => (await getPage()).locator("html");
@@ -102,9 +110,12 @@ export function browserDriver(getPage: () => Promise<Page> = whatsappPage): Driv
   };
 
   const searchFor = async (query: string) => {
-    const box = (await getPage()).locator(SELECTORS.searchBox);
-    await box.fill(query, { timeout: SHORT });
-    await (await getPage()).locator(SELECTORS.searchResults).waitFor({ timeout: WAIT });
+    const page = await getPage();
+    const box = page.locator(SELECTORS.searchBox);
+    await box.fill("", { timeout: SHORT });
+    await box.click({ timeout: SHORT });
+    await typeLikeAPerson(page, query);
+    await page.locator(SELECTORS.searchResults).waitFor({ timeout: WAIT });
   };
 
   const clearSearch = async () => {
@@ -175,8 +186,7 @@ export function browserDriver(getPage: () => Promise<Page> = whatsappPage): Driv
       const lines = text.replace(/\r\n/g, "\n").split("\n");
       for (const [index, line] of lines.entries()) {
         if (index > 0) await page.keyboard.press("Shift+Enter");
-        // Typed key by key at a person's speed: pasting a whole message in an instant looks like a bot.
-        if (line) await page.keyboard.type(line, { delay: 40 + Math.random() * 60 });
+        if (line) await typeLikeAPerson(page, line);
       }
     },
 

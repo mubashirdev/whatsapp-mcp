@@ -65,18 +65,17 @@ default_tools_approval_mode = "approve"
 WhatsApp bans accounts that act like bots. The tool keeps every call to what one person could do by hand:
 
 - **No automation marks.** The window starts without Playwright's automation flag, so `navigator.webdriver` is false and there is no "controlled by automated software" bar.
-- **Human typing.** Drafts are typed key by key, 40 to 100 ms a key, not pasted in an instant.
+- **Human typing.** Drafts and search words are typed key by key, with an uneven 40 to 150 ms between keys, not pasted in an instant.
 - **Paced calls.** Each tool call waits 1.5 to 4 seconds (random) after the last one ended, so a burst of calls doesn't click through chats at machine speed.
-- **Send limits.** At least 30 seconds between sends, at most 8 sends an hour and 30 a day. Send times are kept in `~/.whatsapp-mcp/sends.json`, so a restart doesn't reset them. A refused send leaves the draft in the box to send later.
+- **Send limits.** At least 30 seconds between sends, at most 8 sends an hour and 30 a day. Send times are kept in `~/.whatsapp-mcp/sends.json`, so a restart doesn't reset them. The same text can't go out twice in 24 hours, since one text to many chats is how spam looks. A refused send leaves the draft in the box to send later.
 - **Replies only.** A draft is refused in a chat where the other side hasn't written in the loaded messages. Messaging people who never wrote to you is what gets reported. Start those chats yourself on your phone. Your own chat is always allowed.
 
 Limits live in `SAFE_SENDING` in `src/drafts.ts`. Raising them raises the ban risk.
 
-Also keep in mind: keep WhatsApp Web open on this one machine (not many places), keep your phone online, and don't log in and out often.
+Also keep in mind: keep WhatsApp Web open on this one machine (not many places), keep your phone online, don't log in and out often, and prefer the visible window over `WHATSAPP_HEADLESS=1`, since a hidden browser is easier to spot.
 
 ## Risks
 
-- This drives WhatsApp Web like a person would, but WhatsApp's terms don't allow automated or unofficial clients. Your account could be limited or banned. Use it lightly, for your own chats, and don't use it to message many people.
 - Anyone who can read `~/.whatsapp-mcp/profile` can use your WhatsApp login. Don't copy or share that folder. To log out, remove the linked device on your phone.
 - Codex sees every message the tools read.
 
