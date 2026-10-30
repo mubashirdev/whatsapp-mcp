@@ -17,8 +17,11 @@ export const STILL_LOADING = "WhatsApp is still loading, try again in a moment";
 export const CANT_READ_CHATS = "Couldn't read your chats. WhatsApp may have changed its page";
 export const NO_RESPONSE = "WhatsApp didn't respond. Try again";
 
-/** How long a call waits for WhatsApp to finish loading, and whether the window is hidden (WHATSAPP_HEADLESS=1). */
-export type ToolOptions = { loadWaitMs?: number; headless?: boolean };
+/**
+ * How long a call waits for WhatsApp to finish loading, whether the window is hidden (WHATSAPP_HEADLESS=1),
+ * and the random pause between calls, so a burst of calls doesn't click through chats faster than a person.
+ */
+export type ToolOptions = { loadWaitMs?: number; headless?: boolean; pauseMs?: { min: number; max: number } };
 
 function clamp(limit: number | undefined, { default: fallback, max }: { default: number; max: number }): number {
   return Math.min(Math.max(Math.floor(limit ?? fallback), 1), max);
@@ -29,8 +32,14 @@ function reply(value: unknown): CallToolResult {
 }
 
 /** Registers the six WhatsApp tools. Calls run one at a time, because there is one page. */
-export function registerTools(server: McpServer, driver: Driver, drafts: Drafts, { loadWaitMs = 15_000, headless = false }: ToolOptions = {}): void {
+export function registerTools(server: McpServer, driver: Driver, drafts: Drafts, { loadWaitMs = 15_000, headless = false, pauseMs = { min: 0, max: 0 } }: ToolOptions = {}): void {
   let queue: Promise<unknown> = Promise.resolve();
+  let lastCallEnded = 0;
+
+  async function pause(): Promise<void> {
+    const wait = lastCallEnded + pauseMs.min + Math.random() * (pauseMs.max - pauseMs.min) - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  }
 
   async function ready(): Promise<void> {
     const deadline = Date.now() + loadWaitMs;
@@ -46,8 +55,13 @@ export function registerTools(server: McpServer, driver: Driver, drafts: Drafts,
 
   function run(work: () => Promise<unknown>): Promise<CallToolResult> {
     const result = queue.then(async () => {
-      await ready();
-      return reply(await work());
+      await pause();
+      try {
+        await ready();
+        return reply(await work());
+      } finally {
+        lastCallEnded = Date.now();
+      }
     });
     queue = result.catch(() => {});
     // Only our own sentences go back. Other errors can quote what was typed or shown on the page.

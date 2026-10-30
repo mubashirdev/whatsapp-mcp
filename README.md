@@ -27,7 +27,7 @@ bun install
 bun test && bunx tsc --noEmit
 ```
 
-It uses `playwright-core` 1.64.0-alpha-1790635538000, the same version Agent Chat uses. It reuses the Chromium already in `~/Library/Caches/ms-playwright/chromium-1247` and downloads nothing. If that folder is missing, run `bunx playwright-core install chromium` once.
+It uses `playwright-core` 1.64.0-alpha-1790635538000, the same version Agent Chat uses. It uses the Chromium in `~/Library/Caches/ms-playwright/chromium-1247`. If that folder is missing, run `bunx playwright-core install chromium` once.
 
 ## Add it to Codex
 
@@ -59,6 +59,20 @@ default_tools_approval_mode = "approve"
 - A draft sends once. A second `send_draft` is refused.
 - A draft never types over text you started in the box yourself.
 - Drafts live in memory. After a restart, an old draft id is refused, and the text stays in the box for you to send or clear.
+
+## Staying under WhatsApp's radar
+
+WhatsApp bans accounts that act like bots. The tool keeps every call to what one person could do by hand:
+
+- **No automation marks.** The window starts without Playwright's automation flag, so `navigator.webdriver` is false and there is no "controlled by automated software" bar.
+- **Human typing.** Drafts are typed key by key, 40 to 100 ms a key, not pasted in an instant.
+- **Paced calls.** Each tool call waits 1.5 to 4 seconds (random) after the last one ended, so a burst of calls doesn't click through chats at machine speed.
+- **Send limits.** At least 30 seconds between sends, at most 8 sends an hour and 30 a day. Send times are kept in `~/.whatsapp-mcp/sends.json`, so a restart doesn't reset them. A refused send leaves the draft in the box to send later.
+- **Replies only.** A draft is refused in a chat where the other side hasn't written in the loaded messages. Messaging people who never wrote to you is what gets reported. Start those chats yourself on your phone. Your own chat is always allowed.
+
+Limits live in `SAFE_SENDING` in `src/drafts.ts`. Raising them raises the ban risk.
+
+Also keep in mind: keep WhatsApp Web open on this one machine (not many places), keep your phone online, and don't log in and out often.
 
 ## Risks
 

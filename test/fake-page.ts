@@ -48,6 +48,7 @@ export function fakePage(html: string) {
     locator: (selector: string) => locator(() => (selector === "html" ? [root] : [...root.querySelectorAll(selector)])),
     keyboard: {
       insertText: async (text: string) => void (state.box += text),
+      type: async (text: string) => void (state.box += text),
       press: async (key: string) => {
         if (key === "Shift+Enter") state.box += "\n";
         if (key === "Backspace") state.box = "";

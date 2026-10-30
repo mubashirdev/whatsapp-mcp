@@ -15,8 +15,20 @@ export type OpenWindow = (profile: string, userAgent?: string) => Promise<Browse
 /** WHATSAPP_HEADLESS=1 hides the window. It only works once the profile is logged in, because the QR code needs the window. */
 export const isHeadless = () => process.env.WHATSAPP_HEADLESS === "1";
 
+/** The folder that holds the profile and the send log. */
+export const mcpHome = () => process.env.WHATSAPP_MCP_HOME || join(homedir(), ".whatsapp-mcp");
+
+// Playwright's defaults mark the browser as automated (navigator.webdriver, the "controlled by automated software" bar).
+// WhatsApp can read those, so the window starts like a normal Chrome.
 const openChromium: OpenWindow = (profile, userAgent) =>
-  chromium.launchPersistentContext(profile, { headless: isHeadless(), viewport: null, timeout: LIMITS.launch, ...(userAgent ? { userAgent } : {}) });
+  chromium.launchPersistentContext(profile, {
+    headless: isHeadless(),
+    viewport: null,
+    timeout: LIMITS.launch,
+    ignoreDefaultArgs: ["--enable-automation"],
+    args: ["--disable-blink-features=AutomationControlled"],
+    ...(userAgent ? { userAgent } : {}),
+  });
 
 /** The WhatsApp page in its own Chromium window and profile. Launched on first use, and again after the window closes or fails to load. */
 export function whatsappPage(open: OpenWindow = openChromium): Promise<Page> {
@@ -40,7 +52,7 @@ export async function closeBrowser(): Promise<void> {
 }
 
 async function launch(open: OpenWindow, onClose: () => void): Promise<Page> {
-  const home = process.env.WHATSAPP_MCP_HOME || join(homedir(), ".whatsapp-mcp");
+  const home = mcpHome();
   const profile = join(home, "profile");
   // The profile holds the WhatsApp login, so only you may read it.
   mkdirSync(profile, { recursive: true, mode: 0o700 });
