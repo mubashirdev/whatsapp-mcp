@@ -171,11 +171,12 @@ export function browserDriver(getPage: () => Promise<Page> = whatsappPage): Driv
     typeIntoBox: async (text) => {
       const page = await getPage();
       await page.locator(SELECTORS.messageBox).focus({ timeout: SHORT });
-      // A bare Enter sends in WhatsApp, so lines are joined with Shift+Enter and text goes in with insertText.
+      // A bare Enter sends in WhatsApp, so lines are joined with Shift+Enter and never contain a newline.
       const lines = text.replace(/\r\n/g, "\n").split("\n");
       for (const [index, line] of lines.entries()) {
         if (index > 0) await page.keyboard.press("Shift+Enter");
-        if (line) await page.keyboard.insertText(line);
+        // Typed key by key at a person's speed: pasting a whole message in an instant looks like a bot.
+        if (line) await page.keyboard.type(line, { delay: 40 + Math.random() * 60 });
       }
     },
 

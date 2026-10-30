@@ -233,3 +233,16 @@ test("bug 20: the note draft_message returns also says to discard the draft when
   expect(note).toContain("only after the user explicitly says send");
   expect(note).toContain("If the user declines (no, don't send, cancel), call discard_draft with this draft id.");
 });
+
+test("calls are spaced out by the pause", async () => {
+  const server = new McpServer({ name: "whatsapp", version: "0.0.0" });
+  const { driver } = fakeDriver();
+  registerTools(server, driver, new Drafts(driver), { loadWaitMs: 50, pauseMs: { min: 300, max: 300 } });
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "0.0.0" });
+  await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
+  await client.callTool({ name: "list_chats", arguments: {} });
+  const start = Date.now();
+  await client.callTool({ name: "list_chats", arguments: {} });
+  expect(Date.now() - start).toBeGreaterThanOrEqual(290);
+});
