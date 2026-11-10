@@ -1,11 +1,12 @@
 # whatsapp-mcp
 
-An MCP server for your own use. It opens WhatsApp Web in its own Chromium window and gives Codex six tools:
+An MCP server for your own use. It opens WhatsApp Web in its own Chromium window and gives Codex seven tools:
 
 - `list_chats`: the chats at the top of your chat list.
 - `read_messages`: the newest loaded messages of one chat. Opening a chat marks it read.
 - `search_messages`: WhatsApp's own search over all chats.
-- `draft_message`: types a message into a chat's message box, where you can see it. It does not send.
+- `find_members`: lists the members of a group whose names match, so you can pick who to tag.
+- `draft_message`: types a message into a chat's message box, where you can see it, with real @tags for group members. It does not send.
 - `send_draft`: sends that draft, once, after you say send.
 - `discard_draft`: clears the draft from the box.
 
@@ -59,6 +60,15 @@ default_tools_approval_mode = "approve"
 - A draft sends once. A second `send_draft` is refused.
 - A draft never types over text you started in the box yourself.
 - Drafts live in memory. After a restart, an old draft id is refused, and the text stays in the box for you to send or clear.
+
+## Tagging people in a group
+
+Say "mention Ilyas and Umair" and the AI passes `mentions: ["ilyas", "umair"]` with `@ilyas` and `@umair` in the text. For each one the tool types `@ilyas`, reads WhatsApp's own list of group members, and clicks the one it means, so it becomes a real tag:
+
+- An exact name wins. Otherwise the one member with a word starting with what you said: "ilyas" finds "Ilyas Khan".
+- If several members match ("umair" with Umair Ahmad and Umair Ali), or nobody in the group does, nothing is typed and the AI gets the names back to ask you which one.
+- People outside the group show in WhatsApp's list with an Add button. The tool never clicks those.
+- The draft comes back with the real names, like `@Ilyas Khan @Umair Ahmad`, before you say send.
 
 ## Staying under WhatsApp's radar
 

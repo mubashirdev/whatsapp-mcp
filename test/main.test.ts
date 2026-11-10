@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { expect, test } from "bun:test";
 
-test("node src/main.ts answers initialize and lists six tools over stdio, with nothing else on stdout", async () => {
+test("node src/main.ts answers initialize and lists seven tools over stdio, with nothing else on stdout", async () => {
   const requests = [
     { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } } },
     { jsonrpc: "2.0", method: "notifications/initialized" },
@@ -16,5 +16,5 @@ test("node src/main.ts answers initialize and lists six tools over stdio, with n
   expect(replies).toHaveLength(2);
   expect(replies[0].result.serverInfo.name).toBe("whatsapp");
   expect(replies[0].result.capabilities.tools).toBeDefined();
-  expect(replies[1].result.tools).toHaveLength(6);
+  expect(replies[1].result.tools).toHaveLength(7);
 });

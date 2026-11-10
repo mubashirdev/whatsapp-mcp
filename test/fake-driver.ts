@@ -1,6 +1,6 @@
 import { UserError } from "../src/errors.ts";
 import type { LoginState } from "../src/extract.ts";
-import { pickChat, type Driver } from "../src/whatsapp.ts";
+import { pickChat, pickMember, type Driver } from "../src/whatsapp.ts";
 
 /** A fake WhatsApp page: chats with their own message box, and a log of what was sent. */
 export function fakeDriver(chats = ["Ali Khan", "Ali R", "Mom", "Message yourself"]) {
@@ -14,6 +14,8 @@ export function fakeDriver(chats = ["Ali Khan", "Ali R", "Mom", "Message yoursel
     sendClicks: 0,
     limits: [] as number[],
     boxes,
+    /** Members of the open group, as its mention list shows them. */
+    members: ["Ilyas Khan", "Umair Ahmad", "Umair Ali", "Abu Bakar"],
   };
   const box = () => {
     if (!fake.current) throw new UserError("No chat is open");
@@ -45,6 +47,12 @@ export function fakeDriver(chats = ["Ali Khan", "Ali R", "Mom", "Message yoursel
     typeIntoBox: async (text) => {
       boxes.set(fake.current, box() + text);
     },
+    typeMention: async (name) => {
+      const tag = `@${fake.members[pickMember(fake.members, name)]}`;
+      boxes.set(fake.current, box() + tag);
+      return tag;
+    },
+    findMembers: async (name) => fake.members.filter((member) => member.toLowerCase().includes(name.trim().toLowerCase())),
     clickSend: async () => {
       fake.sendClicks++;
       fake.sent.push({ chat: fake.current, text: box() });

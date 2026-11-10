@@ -1,7 +1,7 @@
 import type { Page } from "playwright-core";
 import { whatsappPage } from "./browser.ts";
 import { UserError } from "./errors.ts";
-import { chatRowPositions, chatRows, headerName, loginState, messageRows, searchRows, selfRowPosition, selfTitle, type ChatRow, type LoginState, type MessageRow, type SearchRow } from "./extract.ts";
+import { chatRowPositions, chatRows, headerName, loginState, mentionNames, messageRows, searchRows, selfRowPosition, selfTitle, type ChatRow, type LoginState, type MessageRow, type SearchRow } from "./extract.ts";
 import { SELECTORS } from "./selectors.ts";
 
 /** What the tools need from the WhatsApp page. The browser one drives Playwright; tests pass a fake. */
@@ -17,6 +17,10 @@ export type Driver = {
   boxText(): Promise<string>;
   /** Types into the open chat's message box without ever pressing a bare Enter. */
   typeIntoBox(text: string): Promise<void>;
+  /** Types @name, tags the one group member it means, and returns the tag's text, like "@Ilyas Khan". */
+  typeMention(name: string): Promise<string>;
+  /** The group members whose names match, read from the mention list. Leaves the box empty. */
+  findMembers(name: string): Promise<string[]>;
   /** Clicks Send and waits for the box to empty. Only Drafts calls it. */
   clickSend(): Promise<void>;
   clearBox(): Promise<void>;
@@ -34,6 +38,25 @@ export function pickChat(names: string[], wanted: string): number | undefined {
   const distinct = [...new Set(rows.map((index) => names[index]))];
   if (distinct.length === 1) throw new UserError(`Several chats are named "${distinct[0]}". Rename one in WhatsApp or use a more exact name`);
   throw new UserError(`Several chats match "${wanted}": ${distinct.join(", ")}. Use a more exact name`);
+}
+
+/**
+ * Finds the member a mention means: the only exact name ignoring case, else the only name with a word starting with it
+ * ("umair" finds "Umair Ahmad"), else the only name containing it. Refuses when several match, so the user is asked.
+ */
+export function pickMember(names: string[], wanted: string): number {
+  const lower = wanted.trim().toLowerCase();
+  const tiers = [
+    (name: string) => name.toLowerCase() === lower,
+    (name: string) => name.toLowerCase().split(/\s+/).some((word) => word.startsWith(lower)) || name.toLowerCase().startsWith(lower),
+    (name: string) => name.toLowerCase().includes(lower),
+  ];
+  for (const matches of tiers) {
+    const rows = names.flatMap((name, index) => (matches(name) ? [index] : []));
+    if (rows.length === 1) return rows[0];
+    if (rows.length > 1) throw new UserError(`Several people in this group match "${wanted}": ${[...new Set(rows.map((index) => names[index]))].join(", ")}. Ask the user which one`);
+  }
+  throw new UserError(`No one in this group matches "${wanted}". Mentions only work for members of a group chat`);
 }
 
 const SELF_WORDS = [SELECTORS.selfChatName.toLowerCase(), "me", "myself"];
@@ -95,7 +118,11 @@ export function browserDriver(getPage: () => Promise<Page> = whatsappPage): Driv
   };
 
   const boxText = async () => {
-    const text = await (await getPage()).locator(SELECTORS.messageBox).innerText({ timeout: SHORT });
+    // WhatsApp's editor puts each line in its own <p>, which innerText reads as a blank line between them.
+    const text = await (await getPage()).locator(SELECTORS.messageBox).evaluate((box) => {
+      const lines = [...box.querySelectorAll("p")];
+      return lines.length ? lines.map((line) => line.textContent ?? "").join("\n") : (box as HTMLElement).innerText;
+    }, undefined, { timeout: SHORT });
     // An empty box still holds an empty line in WhatsApp's editor.
     return text.trim() ? text : "";
   };
@@ -138,6 +165,18 @@ export function browserDriver(getPage: () => Promise<Page> = whatsappPage): Driv
     }
     if (!(await until(async () => (await currentChat()) === match, SHORT))) throw new UserError(`Couldn't open "${match}"`);
     return match;
+  };
+
+  /** Types @name into the box and returns the member names the mention list shows for it. */
+  const openMentionList = async (name: string) => {
+    const page = await getPage();
+    await page.locator(SELECTORS.messageBox).focus({ timeout: SHORT });
+    await typeLikeAPerson(page, `@${name}`);
+    const read = () => html().then((root) => root.evaluate(mentionNames, SELECTORS, { timeout: SHORT }));
+    await until(async () => (await read()).length > 0, SHORT);
+    // The list filters as keys arrive, so read it once more after it settles.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return read();
   };
 
   return {
@@ -187,6 +226,34 @@ export function browserDriver(getPage: () => Promise<Page> = whatsappPage): Driv
       for (const [index, line] of lines.entries()) {
         if (index > 0) await page.keyboard.press("Shift+Enter");
         if (line) await typeLikeAPerson(page, line);
+      }
+    },
+
+    typeMention: async (name) => {
+      const page = await getPage();
+      const names = await openMentionList(name);
+      const index = pickMember(names, name);
+      const tags = page.locator(SELECTORS.mentionTag);
+      const before = await tags.count();
+      // Click the member row's button. Rows of people outside the group are never in this locator.
+      await page.locator(SELECTORS.mentionList).locator(SELECTORS.mentionMember).nth(index).locator("xpath=ancestor::button[1]").click({ timeout: SHORT });
+      if (!(await until(async () => (await tags.count()) > before, SHORT))) throw new UserError(`Couldn't tag "${names[index]}"`);
+      const tag = ((await tags.nth(before).textContent({ timeout: SHORT })) ?? "").trim();
+      // The list can redraw between reading and clicking, so check the tag is the member that was picked. Unsaved names show as "@~Name".
+      if (tag.replace(/^@~?\s*/, "") !== names[index]) throw new UserError(`Tagged the wrong person instead of "${names[index]}", so the draft was cleared`);
+      // WhatsApp adds a space after the tag. Remove it, so the box holds exactly the text around the tag.
+      await page.keyboard.press("Backspace");
+      return tag;
+    },
+
+    findMembers: async (name) => {
+      try {
+        const names = await openMentionList(name);
+        const lower = name.trim().toLowerCase();
+        return names.filter((member) => member.toLowerCase().includes(lower));
+      } finally {
+        await (await getPage()).keyboard.press("ControlOrMeta+A");
+        await (await getPage()).keyboard.press("Backspace");
       }
     },
 

@@ -31,7 +31,7 @@ function reply(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }] };
 }
 
-/** Registers the six WhatsApp tools. Calls run one at a time, because there is one page. */
+/** Registers the seven WhatsApp tools. Calls run one at a time, because there is one page. */
 export function registerTools(server: McpServer, driver: Driver, drafts: Drafts, { loadWaitMs = 15_000, headless = false, pauseMs = { min: 0, max: 0 } }: ToolOptions = {}): void {
   let queue: Promise<unknown> = Promise.resolve();
   let lastCallEnded = 0;
@@ -100,15 +100,26 @@ export function registerTools(server: McpServer, driver: Driver, drafts: Drafts,
     annotations: { readOnlyHint: true },
   }, (input) => run(() => driver.search(input.query, clamp(input.limit, LIMITS.search))));
 
+  server.registerTool("find_members", {
+    description: "Lists the members of a group chat whose names contain the given name, using WhatsApp's mention list. Use it to find the right person before mentioning them, and ask the user when several match. It types @name into the box and clears it, so the box must be empty.",
+    inputSchema: { chat, name: z.string().trim().min(1, "Give a name to look for") },
+    annotations: { readOnlyHint: true },
+  }, (input) => run(() => drafts.findMembers(input.chat, input.name)));
+
   server.registerTool("draft_message", {
-    description: "Types a message into a chat's message box in the WhatsApp window, where the user can see it. It does not send. Show the user the draft. Call send_draft only after the user explicitly says send. If the user declines (no, don't send, cancel), call discard_draft with this draft id.",
+    description: "Types a message into a chat's message box in the WhatsApp window, where the user can see it. It does not send. To tag people in a group, put each name in mentions as the user said it (for example \"ilyas\") and write @ilyas in the text where the tag goes; the tool tags the one group member it means and returns the text with real names. If several members match, it refuses and lists them: ask the user which one. Show the user the returned text. Call send_draft only after the user explicitly says send. If the user declines (no, don't send, cancel), call discard_draft with this draft id.",
     // The text keeps its own spacing; it only must not be blank.
-    inputSchema: { chat, text: z.string().refine((text) => text.trim() !== "", "The message is empty") },
+    inputSchema: {
+      chat,
+      text: z.string().refine((text) => text.trim() !== "", "The message is empty"),
+      mentions: z.array(z.string().trim().min(1, "A mention can't be empty")).max(20, "At most 20 mentions").optional(),
+    },
   }, (input) => run(async () => {
-    const draft = await drafts.draft(input.chat, input.text);
+    const draft = await drafts.draft(input.chat, input.text, input.mentions);
     return {
       draft_id: draft.id,
       chat: draft.chat,
+      text: draft.text,
       note: "Typed into the box, not sent. Call send_draft only after the user explicitly says send. If the user declines (no, don't send, cancel), call discard_draft with this draft id.",
     };
   }));

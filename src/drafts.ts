@@ -40,6 +40,28 @@ function readSendLog(file: string | undefined): SentMessage[] {
   }
 }
 
+/**
+ * Splits a message into plain text and the @mentions to tag. Each mention must show in the text as @name,
+ * where the tag goes. Longer names match first, so "@umair ahmad" isn't read as "@umair".
+ */
+export function splitMentions(text: string, mentions: string[]): { text: string; mention?: string }[] {
+  const names = [...new Set(mentions.map((name) => name.trim()).filter(Boolean))].sort((a, b) => b.length - a.length);
+  if (!names.length) return [{ text }];
+  for (const name of names) {
+    if (!text.toLowerCase().includes(`@${name.toLowerCase()}`)) throw new UserError(`Put @${name} in the text where that mention goes`);
+  }
+  const pattern = new RegExp(`@(${names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
+  const parts: { text: string; mention?: string }[] = [];
+  let last = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match.index > last) parts.push({ text: text.slice(last, match.index) });
+    parts.push({ text: match[0], mention: match[1] });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}
+
 type Draft = { chat: string; text: string; state: "open" | "sent" | "discarded" };
 
 /** Compares box text loosely only where WhatsApp changes it by itself: line endings and nbsp. */
@@ -61,9 +83,13 @@ export class Drafts {
     this.#sent = readSendLog(safety?.logFile);
   }
 
-  /** Types the text into the chat's box and returns the draft id. Never sends. */
-  async draft(chat: string, text: string): Promise<{ id: string; chat: string }> {
+  /**
+   * Types the text into the chat's box and returns the draft id. Never sends.
+   * Each name in mentions is tagged where @name shows in the text, and the returned text has the members' real names.
+   */
+  async draft(chat: string, text: string, mentions: string[] = []): Promise<{ id: string; chat: string; text: string }> {
     if (!text.trim()) throw new UserError("The message is empty");
+    const parts = splitMentions(text, mentions);
     const name = await this.#open(chat);
     // Messaging someone who never wrote to you is what gets accounts reported and banned, so only replies are allowed.
     if (this.#safety && name !== SELECTORS.selfChatName) {
@@ -78,19 +104,34 @@ export class Drafts {
       own.state = "discarded";
     }
     // The box was empty before typing, so on any failure clearing it removes only what we typed.
+    let typed = "";
     try {
-      await this.#driver.typeIntoBox(text);
+      for (const part of parts) {
+        if (part.mention) {
+          typed += await this.#driver.typeMention(part.mention);
+        } else {
+          await this.#driver.typeIntoBox(part.text);
+          typed += part.text;
+        }
+      }
     } catch (error) {
       await this.#driver.clearBox().catch(() => {});
       throw error;
     }
-    if (normalize(await this.#driver.boxText()) !== normalize(text)) {
+    if (normalize(await this.#driver.boxText()) !== normalize(typed)) {
       await this.#driver.clearBox();
       throw new UserError("The draft didn't type in correctly, so the box was cleared and nothing was sent");
     }
     const id = randomUUID();
-    this.#drafts.set(id, { chat: name, text, state: "open" });
-    return { id, chat: name };
+    this.#drafts.set(id, { chat: name, text: typed, state: "open" });
+    return { id, chat: name, text: typed };
+  }
+
+  /** The members of a group chat whose names match, so the user can pick who to mention. Needs an empty box. */
+  async findMembers(chat: string, wanted: string): Promise<{ chat: string; members: string[] }> {
+    const name = await this.#open(chat);
+    if (await this.#driver.boxText()) throw new UserError(`The message box in "${name}" has text in it. Send or clear it first`);
+    return { chat: name, members: await this.#driver.findMembers(wanted) };
   }
 
   /** Sends a draft once, and only if the box still holds exactly its text. */
