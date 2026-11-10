@@ -36,7 +36,8 @@ export function fakePage(html: string) {
     first: () => locator(() => find().slice(0, 1)),
     nth: (index: number) => locator(() => find().slice(index, index + 1)),
     count: async () => find().length,
-    evaluate: async <A, R>(fn: (element: Element, arg: A) => R, arg: A) => fn(find()[0], arg),
+    // The fake keeps the message box's text in state, not in the DOM.
+    evaluate: async <A, R>(fn: (element: Element, arg: A) => R, arg: A) => (find()[0]?.matches(sel.messageBox) ? state.box : fn(find()[0], arg)),
     textContent: async () => find()[0]?.textContent ?? null,
     innerText: async () => (find()[0]?.matches(sel.messageBox) ? state.box : (find()[0]?.textContent ?? "")),
     click: async () => click(find()[0]),

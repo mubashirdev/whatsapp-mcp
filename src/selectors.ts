@@ -43,6 +43,13 @@ export const SELECTORS = {
   searchBox: "[data-testid='chat-list-search-container'] input[role='textbox']",
   messageBox: "footer [contenteditable='true'][role='textbox']",
   sendButton: "footer button[aria-label='Send']",
+  // Typing @ in a group opens this list. Members are contact-mention-list-item rows; people outside the group show as
+  // non-participant-mention-list-item with an Add button, which must never be clicked. Seen on the real page.
+  mentionList: "#wa-popovers-bucket",
+  mentionMember: "[data-testid='contact-mention-list-item']",
+  mentionName: "[data-testid='mention-primary']",
+  // A picked member becomes this tag in the box, with text like "@Ilyas Khan".
+  mentionTag: "footer [contenteditable='true'] span[data-app-text-template]",
 };
 
 export type Selectors = typeof SELECTORS;

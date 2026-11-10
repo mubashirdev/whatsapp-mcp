@@ -35,12 +35,12 @@ const ALL_CALLS: [string, Record<string, unknown>][] = [
   ["discard_draft", { draft_id: NO_SUCH_DRAFT }],
 ];
 
-test("exactly six tools are listed, with read and send hints", async () => {
+test("exactly seven tools are listed, with read and send hints", async () => {
   const { client } = await connect(fakeDriver().driver);
   const { tools } = await client.listTools();
-  expect(tools.map((tool) => tool.name).sort()).toEqual(["discard_draft", "draft_message", "list_chats", "read_messages", "search_messages", "send_draft"]);
+  expect(tools.map((tool) => tool.name).sort()).toEqual(["discard_draft", "draft_message", "find_members", "list_chats", "read_messages", "search_messages", "send_draft"]);
   const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-  for (const name of ["list_chats", "read_messages", "search_messages"]) expect(byName[name].annotations?.readOnlyHint).toBe(true);
+  for (const name of ["find_members", "list_chats", "read_messages", "search_messages"]) expect(byName[name].annotations?.readOnlyHint).toBe(true);
   expect(byName.send_draft.annotations?.destructiveHint).toBe(true);
   expect(byName.send_draft.description).toContain("only after the user explicitly says send");
 });

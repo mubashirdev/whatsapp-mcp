@@ -90,6 +90,12 @@ export function messageRows(root: Element, { limit, sel }: ExtractOptions): Mess
   });
 }
 
+/** The group members in the open mention list, by the name WhatsApp shows. Unsaved people show as "~ Name"; the "~ " is dropped. */
+export function mentionNames(root: Element, sel: Selectors): string[] {
+  const rows = [...(root.querySelector(sel.mentionList)?.querySelectorAll(sel.mentionMember) ?? [])];
+  return rows.map((row) => (row.querySelector(sel.mentionName)?.textContent ?? "").replace(/^~\s*/, "").trim());
+}
+
 /** Reads the message hits shown after a search. */
 export function searchRows(root: Element, { limit, sel }: ExtractOptions): SearchRow[] {
   const results = root.querySelector(sel.searchResults);
